@@ -14,6 +14,7 @@ socket_app = SocketIO(application)
 
 server_shadows = {}
 cursor_positions = {}
+names = {}
 server_text = ""
 patcher = dmp.diff_match_patch()
 
@@ -28,8 +29,27 @@ def handle_message(message):
 def handle_connect():
     print("Connected to session ", request.sid)
      
-    server_shadows[request.sid] = server_text
+@socket_app.on("connect-response")
+def handle_connect_response(user):
+    # TODO: Obviously some kind of authentication would happen here
+
+    name = user['id']
+
+    print("\n\n\n" + name + "\n\n\n")
+
+    if name not in names: 
+        names[name] = request.sid
+
+    else:
+        # replace the old sid
+        sid = names[name]
+
+        del server_shadows[sid]
+        del cursor_positions[sid]
+
+        names[name] = request.sid
     
+    server_shadows[request.sid] = server_text
     send(server_text)
 
 @socket_app.on("sync")

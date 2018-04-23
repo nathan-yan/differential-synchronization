@@ -2,13 +2,39 @@
 <script type = 'text/javascript' src = 'diff_match_patch.js'></script>
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
 
+<link rel = 'stylesheet' href = 'https://cdnjs.cloudflare.com/ajax/libs/materialize/0.100.1/css/materialize.min.css'>
+<script src = 'https://cdnjs.cloudflare.com/ajax/libs/materialize/0.100.1/js/materialize.min.js'></script>
+<style>
+        .cursor {
+            background: white;
+            width: 2px;
+            height: 12px;
+    
+            position: absolute;
+    
+            z-index: 10000;
+        }
+
+        #name {
+            width: 50% !important;
+            font-size: 50px !important; 
+
+            color: white !important;
+        }
+    </style>
+
 <html id = 'cursors'>
     <div id="editor" style = 'width: 100%; height: 100%'>function foo(items) {
             var x = "All this is syntax highlighted";
             return x;
         }</div>
     
-    
+    <div id = 'name-wrapper' style = 'z-index: 10000; position: absolute; top:0; left:0 ; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8)' class = 'valign-wrapper'>
+        <div style = 'width: 100%; text-align: center'>
+            <input id = 'name' placeholder = 'ID'>
+        </div>
+    </div>
+
 </html> 
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.3.3/ace.js" type="text/javascript" charset="utf-8"></script>
@@ -33,139 +59,142 @@
 
 </script>
 
-<style>
-    .cursor {
-        background: white;
-        width: 2px;
-        height: 12px;
 
-        position: absolute;
-
-        z-index: 10000;
-    }
-</style>
 
 <script type="text/javascript" charset="utf-8">
     var client_shadow = ""; 
     var client_text = "";
 
     var dmp = new diff_match_patch();
+    var username; 
 
-    var socket = io.connect('http://192.168.1.11:5000');
-    //socket.on('connect', function() {
-     //   socket.emit('connect', {thing: 'I\'m connected!'});
-    //});
+    $('#name').keydown(function(e){
+        if (e.keyCode == 13){
+            username = $('#name').val();
+            start(); 
+            $('#name-wrapper').css('display', 'none');
+        }
+    })
 
-    function apply_patches(patches){
-        var doc = editor.session.getDocument();
-        var offset = patches.start1;
-        var Range = ace.Range;
-        patches['diffs'].forEach(function(chunk) {
-           
-            var op = chunk[0];
-            var text = chunk[1];
+    function start(){
+        var socket = io.connect('http://192.168.1.11:5000');
 
-            console.log(op, text);
-
-            if (op === 0) {
-                offset += text.length;
-            } else if (op === -1) {
-                doc.remove(Range.fromPoints(
-                    doc.indexToPosition(offset),
-                    doc.indexToPosition(offset + text.length)
-                ));
-            } else if (op === 1) {
-                doc.insert(doc.indexToPosition(offset), text);
-                offset += text.length;
-            }
+        socket.on('connect', function() {
+            socket.emit('connect-response', {id : username});
         });
-    }
 
-    socket.on("message", function(message){
-        editor.setValue(message);
-        client_text = message;
-        client_shadow = message;
-    });
+        function apply_patches(patches){
+            var doc = editor.session.getDocument();
+            var offset = patches.start1;
+            var Range = ace.Range;
+            patches['diffs'].forEach(function(chunk) {
+            
+                var op = chunk[0];
+                var text = chunk[1];
 
-    socket.on("sync", function(patches){
-        console.log(patches)
-        //console.log("\nDocument was changed, here are the patches: " + patches['patches'] + '\n')
-        var cursor_positions = JSON.parse(patches['cursor_positions'])
+                console.log(op, text);
 
-        patches = dmp.patch_fromText(patches['patches'])
+                if (op === 0) {
+                    offset += text.length;
+                } else if (op === -1) {
+                    doc.remove(Range.fromPoints(
+                        doc.indexToPosition(offset),
+                        doc.indexToPosition(offset + text.length)
+                    ));
+                } else if (op === 1) {
+                    doc.insert(doc.indexToPosition(offset), text);
+                    offset += text.length;
+                }
+            });
+        }
 
-        client_shadow = dmp.patch_apply(patches, client_shadow)[0]
-        console.log(patches);
+        socket.on("message", function(message){
+            editor.setValue(message);
+            client_text = message;
+            client_shadow = message;
+        });
 
-        if (patches.length >= 1){
-            for (var i = 0; i < patches.length; i++){
-                apply_patches(patches[i]);
+        socket.on("sync", function(patches){
+            console.log(patches)
+            //console.log("\nDocument was changed, here are the patches: " + patches['patches'] + '\n')
+            var cursor_positions = JSON.parse(patches['cursor_positions'])
+
+            patches = dmp.patch_fromText(patches['patches'])
+
+            client_shadow = dmp.patch_apply(patches, client_shadow)[0]
+            console.log(patches);
+
+            if (patches.length >= 1){
+                for (var i = 0; i < patches.length; i++){
+                    apply_patches(patches[i]);
+                }
+            }
+
+            var cursor_position = editor.selection.getCursor();
+
+            if (patches != ''){
+                //editor.setValue(client_text);
+                //editor.setValue(editor.getValue(), 1);
+            }
+
+            var current_sid = socket.io.engine.id
+            
+            //editor.focus();
+            //editor.gotoLine(cursor_position['row']+1, cursor_position['column'], true);
+            //editor.renderer.scrollToRow(cursor_positions[sid][0]);
+
+            var colors = ["#0084FF","#44BEC7","#FFC300","#FA3C4C","#D696BB","#6699CC","#FF7E29","#7646FF","#20CEF5","#67B868","#D4A88C","#FF5CA1"];
+
+            $('.cursor').remove();
+
+            var c = 0;
+            for (var sid in cursor_positions){
+                if (sid != current_sid){
+                    var cursor = $(`<div class = "cursor" id = cursor-${sid}></div>`);
+                    var temp = $(`<span style = 'font-size: 12px; font-family: Consolas'>${"".padStart(cursor_positions[sid][1] + 1, 'a')}</span>`);
+
+                    $('body').append(temp);
+                    
+                    cursor.css('top', cursor_positions[sid][0] * 14 + 2);
+                    cursor.css('left', 44 + temp.width());
+                    cursor.css('background', colors[c]);
+
+                    c++;
+
+                    $('#cursors').append(cursor); 
+
+                    temp.remove()
+                }
+            }
+
+        });
+
+        // Synchronization steps happen every now and then
+        var synchronization_steps = 0;
+        function synchronization_step(){
+            synchronization_steps++;
+
+            if (editor.getValue() != client_shadow || synchronization_steps % 2 == 0){
+                client_text = editor.getValue();
+                
+                var split = client_text.split('\n')
+
+                var cursor_position =  editor.selection.getCursor();
+                var row = cursor_position['row'];
+                var column = cursor_position['column'];
+
+                // apply a cursor to row/column and stitch `split` back together
+            
+                patches = dmp.patch_make(client_shadow, client_text)
+
+                // copy client_text into client_shadow
+                client_shadow = client_text
+                
+                socket.emit("sync", {patches : dmp.patch_toText(patches), row : row, column : column})
             }
         }
 
-        var cursor_position = editor.selection.getCursor();
-
-        if (patches != ''){
-            //editor.setValue(client_text);
-            //editor.setValue(editor.getValue(), 1);
-        }
-
-        var sid = socket.io.engine.id
-        
-        //editor.focus();
-        //editor.gotoLine(cursor_position['row']+1, cursor_position['column'], true);
-        //editor.renderer.scrollToRow(cursor_positions[sid][0]);
-
-        var colors = ["#0084FF","#44BEC7","#FFC300","#FA3C4C","#D696BB","#6699CC","#FF7E29","#7646FF","#20CEF5","#67B868","#D4A88C","#FF5CA1"];
-
-        $('.cursor').remove();
-
-        var c = 0;
-        for (var sid in cursor_positions){
-            
-            var cursor = $(`<div class = "cursor" id = cursor-${sid}></div>`);
-            var temp = $(`<span style = 'font-size: 12px; font-family: Consolas'>${"a".padStart(cursor_positions[sid][1] + 2, 'a')}</span>`);
-
-            $('body').append(temp);
-            
-            cursor.css('top', cursor_positions[sid][0] * 14 + 7 + 2);
-            cursor.css('left', 44 + temp.width());
-            cursor.css('background', colors[c]);
-
-            c++;
-
-            $('#cursors').append(cursor); 
-
-            temp.remove()
-        }
-
-    });
-
-    // Synchronization steps happen every now and then
-    var synchronization_steps = 0;
-    function synchronization_step(){
-        synchronization_steps++;
-
-        if (editor.getValue() != client_shadow || synchronization_steps % 2 == 0){
-            client_text = editor.getValue();
-            
-            var split = client_text.split('\n')
-
-            var cursor_position =  editor.selection.getCursor();
-            var row = cursor_position['row'];
-            var column = cursor_position['column'];
-
-            // apply a cursor to row/column and stitch `split` back together
-           
-            patches = dmp.patch_make(client_shadow, client_text)
-
-            // copy client_text into client_shadow
-            client_shadow = client_text
-            
-            socket.emit("sync", {patches : dmp.patch_toText(patches), row : row, column : column})
-        }
+        setInterval(synchronization_step, 500)
     }
-
-    setInterval(synchronization_step, 500)
     
 </script>
