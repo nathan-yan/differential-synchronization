@@ -77,7 +77,7 @@
     })
 
     function start(){
-        var socket = io.connect('http://192.168.1.11:5000');
+        var socket = io.connect('http://192.168.1.27:5000');
 
         socket.on('connect', function() {
             socket.emit('connect-response', {id : username});
@@ -151,7 +151,7 @@
             for (var sid in cursor_positions){
                 if (sid != current_sid){
                     var cursor = $(`<div class = "cursor" id = cursor-${sid}></div>`);
-                    var temp = $(`<span style = 'font-size: 12px; font-family: Consolas'>${"".padStart(cursor_positions[sid][1] + 1, 'a')}</span>`);
+                    var temp = $(`<span style = "font-size: 12px; font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'source-code-pro', monospace">${"".padStart(cursor_positions[sid][1] + 1, 'a')}</span>`);
 
                     $('body').append(temp);
                     
