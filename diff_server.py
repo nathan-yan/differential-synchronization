@@ -4,6 +4,8 @@ from flask_socketio import SocketIO, send, emit
 
 import diff_match_patch as dmp
 
+import json
+
 import threading
 import time
 
@@ -11,6 +13,7 @@ application = Flask(__name__)
 socket_app = SocketIO(application)
 
 server_shadows = {}
+cursor_positions = {}
 server_text = ""
 patcher = dmp.diff_match_patch()
 
@@ -35,6 +38,10 @@ def sync(patches):
 
     print("\nDocument was changed, here are the patches: " + patches['patches'] + "\n")
 
+    cursor_positions[request.sid] = [patches['row'], patches['column']]
+
+    emit("sync", {"patches" : "", "cursor_positions" : json.dumps(cursor_positions)}, callback = ack)
+
     patches = patcher.patch_fromText(patches['patches'])
 
     # apply patches
@@ -45,7 +52,7 @@ def sync(patches):
 
 def start_server():
     print('Starting server')
-    socket_app.run(application, host = '192.168.1.27', debug = True)
+    socket_app.run(application, host = '192.168.1.11', debug = True)
 
 def synchronization():
     print("Starting synchronization loop")
@@ -63,7 +70,7 @@ def synchronization():
 
                 server_shadows[sid] = server_text 
 
-                socket_app.emit("sync", {"patches" : patcher.patch_toText(patches)}, room = sid, callback = ack)
+                socket_app.emit("sync", {"patches" : patcher.patch_toText(patches), "cursor_positions" : json.dumps(cursor_positions)}, room = sid, callback = ack)
         
         if (not unsynced):
             print("Reached equilibrium")
